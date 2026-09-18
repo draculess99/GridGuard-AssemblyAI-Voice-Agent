@@ -9,6 +9,7 @@ load_dotenv()
 from backend.assemblyai_integration import transcribe_audio, is_mock_mode, mock_transcribe_audio
 from backend.extraction import extract_incident_details
 from backend.audit import save_audit_packet
+from backend.conversation import generate_conversation_timeline
 
 st.set_page_config(page_title="GridGuard Voice Escalation", page_icon="⚡", layout="wide")
 
@@ -90,7 +91,28 @@ if st.session_state.transcript:
     col4.metric("Requested Action", details["requested_action"])
     
     st.markdown("---")
-    st.subheader("3. Human Approval Gate")
+    st.subheader("3. Conversation Review Panel")
+    
+    timeline = generate_conversation_timeline(st.session_state.transcript, details, mock_mode)
+    for msg in timeline:
+        speaker_icon = "👤" if msg["speaker"] == "Caller" else "🤖"
+        with st.chat_message(msg["speaker"], avatar=speaker_icon):
+            st.markdown(f"**{msg['speaker']}**")
+            st.write(msg["text"])
+            
+    st.markdown("---")
+    st.subheader("4. Approval State")
+    st.markdown(f"""
+    * **Caller identity:** Demo directory matched
+    * **Caller role:** Operations Supervisor
+    * **Requested action:** {details.get('requested_action')}
+    * **Verbal intent:** Recorded
+    * **Final authorization:** Pending explicit human decision
+    * **Execution mode:** Dry-run only
+    """)
+
+    st.markdown("---")
+    st.subheader("5. Human Approval Gate")
     st.markdown("GridGuard acts as **decision support only**. Review the incident and explicitly approve or reject.")
     
     consent = st.checkbox("I have reviewed the transcription and extraction.")

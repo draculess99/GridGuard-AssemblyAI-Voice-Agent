@@ -45,3 +45,26 @@ def test_mock_mode_active_by_default():
     # If no env var is set, it should be mock mode
     if not os.environ.get("ASSEMBLYAI_API_KEY"):
         assert is_mock_mode() == True
+
+from backend.conversation import generate_conversation_timeline
+
+def test_conversation_timeline_mock():
+    transcript = "Mock"
+    details = {"severity": "Critical", "location": "Alpha", "affected_asset": "Transformer", "requested_action": "Deploy"}
+    timeline = generate_conversation_timeline(transcript, details, is_mock=True)
+    
+    assert len(timeline) == 7
+    assert timeline[0]["speaker"] == "Caller"
+    assert "Jordan Lee" in timeline[0]["text"]
+    assert timeline[3]["speaker"] == "GridGuard Authorization Service"
+    assert "Demo authorization lookup" in timeline[3]["text"]
+
+def test_conversation_timeline_live():
+    transcript = "Real live transcript of an event."
+    details = {"severity": "Critical", "location": "Alpha", "affected_asset": "Transformer", "requested_action": "Deploy"}
+    timeline = generate_conversation_timeline(transcript, details, is_mock=False)
+    
+    assert len(timeline) == 7
+    assert timeline[0]["speaker"] == "Caller"
+    assert timeline[0]["text"] == transcript
+    assert timeline[3]["speaker"] == "GridGuard Authorization Service"

@@ -7,6 +7,7 @@ Explainable grid forecasting with approval-gated, inbound AssemblyAI voice trans
 - **AssemblyAI Transcription**: Uses the official AssemblyAI Python SDK to transcribe audio incidents.
 - **Mock Mode**: Fully functional offline mock mode when `ASSEMBLYAI_API_KEY` is not provided.
 - **Entity Extraction**: Extracts incident location, severity, affected asset, and requested action.
+- **Voice Conversation Workflow**: Demonstrates a credible operational timeline where AssemblyAI provides the initial transcription, a deterministic demo authorization service verifies the caller's role (note: this is a mock directory lookup, not biometric or voice authentication), and an explicit on-screen human approval gate must be cleared before any action is recorded.
 - **Human-in-the-loop Governance**: Strict approval gate requiring human consent before decisions are executed.
 - **Audit Logging**: JSON-based audit packet logging.
 
