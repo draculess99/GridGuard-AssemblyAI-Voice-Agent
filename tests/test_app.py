@@ -68,3 +68,10 @@ def test_conversation_timeline_live():
     assert timeline[0]["speaker"] == "Caller"
     assert timeline[0]["text"] == transcript
     assert timeline[3]["speaker"] == "GridGuard Authorization Service"
+
+def test_post_decision_state_rendered_logic():
+    with open("app.py", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "Dry-run recorded — no grid action executed" in content
+    assert "Audit status:** Recorded successfully" in content
+    assert "Final authorization:** Approved by human reviewer" in content

@@ -102,14 +102,26 @@ if st.session_state.transcript:
             
     st.markdown("---")
     st.subheader("4. Approval State")
-    st.markdown(f"""
-    * **Caller identity:** Demo directory matched
-    * **Caller role:** Operations Supervisor
-    * **Requested action:** {details.get('requested_action')}
-    * **Verbal intent:** Recorded
-    * **Final authorization:** Pending explicit human decision
-    * **Execution mode:** Dry-run only
-    """)
+    if st.session_state.get('executed_decision'):
+        st.markdown(f"""
+        * **Caller identity:** Demo directory matched
+        * **Caller role:** Operations Supervisor
+        * **Requested action:** {details.get('requested_action')}
+        * **Verbal intent:** Recorded
+        * **Final authorization:** Approved by human reviewer
+        * **Decision outcome:** {st.session_state.executed_decision}
+        * **Execution mode:** Dry-run recorded — no grid action executed
+        * **Audit status:** Recorded successfully
+        """)
+    else:
+        st.markdown(f"""
+        * **Caller identity:** Demo directory matched
+        * **Caller role:** Operations Supervisor
+        * **Requested action:** {details.get('requested_action')}
+        * **Verbal intent:** Recorded
+        * **Final authorization:** Pending explicit human decision
+        * **Execution mode:** Dry-run only
+        """)
 
     st.markdown("---")
     st.subheader("5. Human Approval Gate")
@@ -136,5 +148,10 @@ if st.session_state.transcript:
                     decision,
                     outcome_state
                 )
-                st.success(f"Decision '{decision}' recorded successfully! Audit saved to `{filepath}`.")
-                st.info("Note: GridGuard never executes grid actions or contacts anyone automatically.")
+                st.session_state.executed_decision = decision
+                st.session_state.audit_filepath = filepath
+                st.rerun()
+                
+    if st.session_state.get('executed_decision'):
+        st.success(f"Decision '{st.session_state.executed_decision}' recorded successfully! Audit saved to `{st.session_state.get('audit_filepath')}`.")
+        st.info("Note: GridGuard never executes grid actions or contacts anyone automatically.")
