@@ -1,0 +1,5 @@
+streamlit
+assemblyai
+python-dotenv
+pytest
+pytest-cov
