@@ -71,8 +71,8 @@ GridGuard supports both:
 3. **Live AssemblyAI transcription and extraction:** demonstrates a real uploaded audio file transcribed through AssemblyAI, with location, severity, affected asset, and requested action extracted.
 ![Live AssemblyAI transcription and extraction](docs/images/03-live-transcription-extraction.png)
 
-4. **Human approval required:** demonstrates that a critical live incident cannot proceed until a human explicitly confirms review and selects a decision.
+4. **Human approval required:** Live AssemblyAI transcription feeds the Conversation Review Panel and deterministic demo authorization context. Verbal intent is recorded, but final authorization remains pending until a human reviewer explicitly selects and executes a decision.
 ![Human approval required](docs/images/04-human-approval-required.png)
 
-5. **Approved dry-run audit trail:** demonstrates an approved live workflow being recorded to the audit trail while GridGuard remains decision support only and never executes grid actions or contacts people automatically.
+5. **Approved dry-run audit trail:** After explicit human approval, the Approval State updates with the documented decision, confirms dry-run-only execution with no grid action taken, and records the audit packet successfully.
 ![Approved dry-run audit trail](docs/images/05-approved-dry-run-audit-trail.png)
