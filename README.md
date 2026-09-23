@@ -1,6 +1,8 @@
 # GridGuard AssemblyAI Voice Agent
 
-Explainable grid forecasting with approval-gated, inbound AssemblyAI voice transcription. This project is a separate edition of the original GridGuard Voice Escalation Agent, replacing the Call-E outbound calling with inbound AssemblyAI-powered audio transcription.
+Approval-gated, inbound AssemblyAI voice transcription with local dry-run supervisor escalation simulation.
+
+Call-E supervisor escalation is a local dry-run simulation. Optional Live Mode sends audio to AssemblyAI only for transcription; no real telephone call, external Call-E request, or grid action occurs.
 
 ## Features
 - **Upload Incident Audio**: Accepts `.wav`, `.mp3`, and `.m4a` files.
@@ -58,21 +60,176 @@ The application will open in your default browser at `http://localhost:8501`.
 ## Demo Walkthrough
 
 GridGuard supports both:
-* **Live Mode**: AssemblyAI transcribes uploaded audio.
-* **Mock Mode**: deterministic offline fallback for safe testing.
-* **Dry-run by default**: all proposed actions require explicit human approval and are audit logged; no real grid action is executed.
+* **Live Mode**: AssemblyAI transcribes uploaded or recorded audio (optional; requires `ASSEMBLYAI_API_KEY`).
+* **Mock Mode**: deterministic offline fallback for safe testing when the API key is not provided.
+* **Dry-run by default**: all proposed actions require explicit human approval and are audit logged; no real grid action, telephone call, or external escalation occurs.
 
-1. **Mock-mode hold decision:** demonstrates the safe offline fallback and an auditable "Hold" outcome.
-![Mock-mode hold decision](docs/images/01_mock_incident_hold_audit.png)
+1. **Live Mode microphone recording:** Audio is sent to AssemblyAI for transcription only after the user selects **Transcribe Recording**. The resulting incident record identifies the input channel as `microphone`.
+![Live Mode microphone recording](docs/images/06-live-microphone-transcription.png)
 
-2. **Mock-mode approved decision:** demonstrates a reviewed mock incident being approved and recorded in the audit trail.
-![Mock-mode approved decision](docs/images/02_mock_incident_approve_audit.png)
+2. **Mock Mode local transcript:** Mock Mode retains microphone input capability but does not transcribe or send the recording to AssemblyAI or any external service. It uses the deterministic sample transcript instead.
+![Mock Mode local transcript](docs/images/07-mock-mode-local-transcript.png)
 
-3. **Live AssemblyAI transcription and extraction:** demonstrates a real uploaded audio file transcribed through AssemblyAI, with location, severity, affected asset, and requested action extracted.
-![Live AssemblyAI transcription and extraction](docs/images/03-live-transcription-extraction.png)
+3. **Operator selects Escalate:** The operator explicitly reviews the transcription, selects **Escalate**, and records the first human decision in the audit packet. No contact or grid action occurs automatically.
+![Operator selects Escalate](docs/images/08-operator-escalate-recorded.png)
 
-4. **Human approval required:** Live AssemblyAI transcription feeds the Conversation Review Panel and deterministic demo authorization context. Verbal intent is recorded, but final authorization remains pending until a human reviewer explicitly selects and executes a decision.
-![Human approval required](docs/images/04-human-approval-required.png)
+4. **Call-E dry-run confirmation:** Local Call-E dry-run simulation. Call-E identifies itself as an AI agent; the operator selects a simulated supervisor outcome and completes a separate final confirmation. No real call, network call, or grid action occurs.
+![Call-E dry-run confirmation](docs/images/09-call-e-dry-run-confirmation.png)
 
-5. **Approved dry-run audit trail:** After explicit human approval, the Approval State updates with the documented decision, confirms dry-run-only execution with no grid action taken, and records the audit packet successfully.
-![Approved dry-run audit trail](docs/images/05-approved-dry-run-audit-trail.png)
+5. **Approved supervisor outcome:** Approved simulated supervisor outcome. The supervisor authorization and approval are recorded, and the audit packet includes both the operator decision and simulated supervisor result with `dry_run: true`.
+![Approved supervisor outcome](docs/images/10-supervisor-approved-audit-saved.png)
+
+6. **Denied supervisor outcome:** Denied simulated supervisor outcome. The simulated supervisor is authorized but denies escalation; the escalation is blocked and the complete result is recorded in the audit packet.
+![Denied supervisor outcome](docs/images/11-supervisor-denied-audit-saved.png)
+
+## End-to-End Workflow
+
+1. **Audio Ingestion** (Section 1)
+   - Choose one input channel:
+     - **Microphone**: record directly via `st.audio_input()`
+     - **Upload**: select a `.wav`, `.mp3`, or `.m4a` file
+     - **Sample**: run a deterministic test incident
+   - Click "Transcribe Audio", "Transcribe Recording", or "Run Sample Incident"
+
+2. **Transcription & Extraction** (Section 2)
+   - **Live Mode** (if `ASSEMBLYAI_API_KEY` is set): audio is sent to AssemblyAI for live transcription
+   - **Mock Mode** (if key is blank): audio is not sent externally; the app uses a deterministic canned transcript
+   - Extracted incident details: location, severity, affected asset, requested action, incident ID
+   - Input channel is recorded in the audit: microphone, upload, or sample
+
+3. **Conversation Review Panel** (Section 3)
+   - Displays a synthetic conversation timeline showing operator and agent exchange
+   - No biometric, voice, or directory authentication is claimed
+   - Demonstrates what a supervisor would hear (mock only)
+
+4. **Operator Approval Gate** (Section 5)
+   - **Checkbox**: "I have reviewed the transcription and extraction"
+   - **Radio selection**: Approve, Hold, Reject, or **Escalate**
+   - **Button**: "Execute Decision"
+   - Any decision is recorded in the audit packet with timestamp
+
+5. **Decision Outcomes**
+   - **Approve**: Operator approves the incident response; audit is saved; workflow ends
+   - **Hold**: Operator places decision on hold; audit is saved; workflow ends
+   - **Reject**: Operator rejects the incident; audit is saved; workflow ends
+   - **Escalate**: Operator requests supervisor escalation; Section 6 appears with dry-run call simulation (see below)
+
+6. **Call-E Dry-Run Supervisor Escalation** (Section 6, visible only after Escalate)
+   - **Disclosure Banner**:
+     - "Call-E is an AI agent"
+     - "This is a simulated dry-run. No real call will be placed."
+     - "Supervisor identity and approval are simulated outcomes only"
+   - **Scenario Selector**: Choose a simulated supervisor outcome
+     - Authorized, reviewed, approve
+     - Authorized, reviewed, reject
+     - Not authorized / wrong person
+     - Authorized, not reviewed
+     - Call-E execution failure (simulated provider error)
+   - **Second Confirmation Checkbox**: "I understand this is a dry-run simulation with no real call or grid action"
+   - **Button**: "Run Simulated Supervisor Escalation"
+   - The simulated transcript includes: Call-E self-identifying as an AI agent, no external call or network activity
+
+7. **Supervisor Response & Result** (Section 7, after simulation runs)
+   - **Status**: Shows canonical outcome (Approved, Denied, Unavailable, or Failed)
+   - **Metrics**: Auth Confirmed, Review Confirmed, Supervisor Outcome, Mode
+   - **Simulated Transcript**: Full mock conversation
+   - **Audit Button**: "Save escalation result to audit packet"
+
+8. **Audit Packet** (Final)
+   - Saved as JSON in `audits/` directory
+   - Contains:
+     - Timestamp (UTC ISO format with Z suffix)
+     - Original transcript
+     - Incident details (location, severity, asset, action, ID)
+     - Input channel (microphone, upload, or sample)
+     - Source (mock or assemblyai_live)
+     - Operator decision and outcome state
+     - Supervisor escalation result (if applicable): auth_confirmed, review_confirmed, approval_decision, supervisor_outcome, workflow_result, simulated transcript
+     - `dry_run: true` (always; no real action is ever executed)
+
+## Decision and Supervisor Outcomes
+
+| Operator Decision | Audit Status | Call-E Simulation | Supervisor Outcome | Next Step |
+|---|---|---|---|---|
+| **Approve** | Recorded | No | N/A | Workflow ends |
+| **Hold** | Recorded | No | N/A | Workflow ends |
+| **Reject** | Recorded | No | N/A | Workflow ends |
+| **Escalate** | Recorded | Yes (dry-run only) | Approved, Denied, Unavailable, or Failed | Save to audit |
+
+**Supervisor Outcomes** (when Escalate is chosen):
+- **Approved**: Authorized supervisor reviewed and approved the escalation
+- **Denied**: Authorized supervisor reviewed and denied the escalation
+- **Unavailable**: Supervisor not authorized or not available for review
+- **Failed**: Simulated Call-E execution failure (no contact established)
+
+## Safety Boundaries
+
+**What is NOT in this system:**
+
+- ❌ No real telephone call is placed
+- ❌ No Call-E SDK integration or API key is used
+- ❌ No phone number (E.164 format) is stored or dialed
+- ❌ No biometric voice authentication or verification
+- ❌ No real supervisor identity verification (simulated only)
+- ❌ No emergency dispatch or grid action execution
+- ❌ No WebSocket streaming or real-time call signaling
+- ❌ No automatic action without explicit human approval
+
+**What is guaranteed:**
+
+- ✓ **Dry-run by default**: `dry_run: true` in every audit packet
+- ✓ **Two approval gates**: Operator must approve before decision is recorded; second confirmation required before supervisor simulation runs
+- ✓ **AI disclosure**: Simulated Call-E agent explicitly identifies itself as an AI agent in the transcript
+- ✓ **Mock Mode safety**: Audio is never sent to AssemblyAI if the API key is not configured
+- ✓ **Audit trail**: Complete transcript of all decisions and simulated outcomes
+- ✓ **Local simulation**: All supervisor escalation is computed locally; no external network calls for Call-E
+
+## Architecture
+
+```mermaid
+flowchart TD
+    Start([User starts app]) --> Input{Input channel}
+    Input -->|Microphone| Mic["Record audio<br/>via st.audio_input"]
+    Input -->|Upload| Upload["Select .wav, .mp3, .m4a<br/>file"]
+    Input -->|Sample| Sample["Run deterministic<br/>test incident"]
+
+    Mic --> CheckKey{ASSEMBLYAI_API_KEY<br/>configured?}
+    Upload --> CheckKey
+    Sample --> Mock
+
+    CheckKey -->|Yes| Live["Live Mode:<br/>Send audio to AssemblyAI<br/>Get transcript"]
+    CheckKey -->|No| Mock["Mock Mode:<br/>Use deterministic<br/>canned transcript<br/>(no external call)"]
+
+    Live --> Extract["Extract incident details:<br/>location, severity, asset,<br/>requested action, ID"]
+    Mock --> Extract
+
+    Extract --> Display["Display transcript &<br/>extracted details"]
+    Display --> Gate["Operator Approval Gate:<br/>Review & choose outcome"]
+
+    Gate --> Decision{Operator<br/>Decision}
+    Decision -->|Approve| Audit1["Record decision<br/>in audit packet"]
+    Decision -->|Hold| Audit1
+    Decision -->|Reject| Audit1
+    Decision -->|Escalate| Confirm["Second Confirmation:<br/>Checkbox required:<br/>Acknowledge this is<br/>a dry-run simulation"]
+
+    Confirm --> SimCall["Local Call-E Simulation:<br/>- AI agent self-identifies<br/>- Choose outcome scenario<br/>- Compute supervisor response<br/>(no network call)"]
+
+    SimCall --> Result["Supervisor Result:<br/>Approved/Denied/<br/>Unavailable/Failed"]
+    Result --> Audit2["Record operator decision<br/>+ supervisor result<br/>in audit packet"]
+
+    Audit1 --> End1["Workflow ends<br/>dry_run: true"]
+    Audit2 --> End2["Workflow ends<br/>dry_run: true"]
+
+    style Live fill:#e1f5ff
+    style Mock fill:#fff3e0
+    style Audit1 fill:#e8f5e9
+    style Audit2 fill:#e8f5e9
+    style SimCall fill:#f3e5f5
+```
+
+**Key design points:**
+- **Input diversity**: Microphone, upload, or deterministic sample ensure offline testing is always possible
+- **Mode toggle**: Live/Mock decision is automatic; respects `ASSEMBLYAI_API_KEY` presence, not a user choice
+- **Human gates**: Two explicit checkboxes and one decision radio ensure intentional approval
+- **Local simulation**: Supervisor escalation is computed entirely offline; no external API calls for Call-E
+- **Audit completeness**: Both operator and simulated supervisor decisions are captured in one JSON packet with `dry_run: true`
