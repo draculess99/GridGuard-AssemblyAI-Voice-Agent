@@ -7,6 +7,7 @@ load_dotenv()
 from backend.assemblyai_integration import is_mock_mode, mock_transcribe_audio
 from backend.audio_input import STATUS_ERROR, STATUS_NETWORK_BLOCKED, handle_audio_input
 from backend.audit import save_audit_packet
+from backend.call_e_adapter import build_advisory, build_dry_run_escalation, DRY_RUN_SCENARIOS
 from backend.conversation import generate_conversation_timeline
 from backend.incident import build_synthetic_incident_record
 
@@ -113,6 +114,11 @@ def store_incident(transcript: str, source: str, input_channel: str) -> None:
     # A new incident must be reviewed afresh: clear the previous review acknowledgement and choice.
     st.session_state.review_consent = False
     st.session_state.review_decision = None
+    # Clear any previous Call-E escalation state
+    st.session_state.escalation_result = None
+    st.session_state.escalation_scenario_executed = None
+    st.session_state.escalation_consent = False
+    st.session_state.escalation_audit_saved = False
 
 
 def ingest_audio(audio_bytes: bytes, suffix: str, input_channel: str) -> None:
@@ -233,21 +239,23 @@ if st.session_state.transcript:
     st.markdown("---")
     st.subheader("5. Human Approval Gate")
     st.markdown("GridGuard acts as **decision support only**. Review the incident and explicitly approve or reject.")
-    
+
+    # Outcome mapping for audit consistency (available to both decision execution and Call-E result save)
+    outcome_mapping = {
+        "Approve": "ESCALATION_APPROVED",
+        "Hold": "REVIEWED_HOLD",
+        "Reject": "REVIEWED_NOT_APPROVED",
+        "Escalate": "ESCALATION_APPROVED"
+    }
+
     consent = st.checkbox("I have reviewed the transcription and extraction.", key="review_consent")
 
     decision = st.radio("Decision Outcome:", ["Approve", "Hold", "Reject", "Escalate"], index=None, horizontal=True, key="review_decision")
-    
+
     can_execute = consent and decision is not None
-    
+
     if st.button("Execute Decision", disabled=not can_execute):
         with st.spinner("Saving audit packet..."):
-                outcome_mapping = {
-                    "Approve": "ESCALATION_APPROVED",
-                    "Hold": "REVIEWED_HOLD",
-                    "Reject": "REVIEWED_NOT_APPROVED",
-                    "Escalate": "ESCALATION_APPROVED"
-                }
                 outcome_state = outcome_mapping.get(decision, "UNKNOWN")
                 filepath = save_audit_packet(
                     st.session_state.incident_record,
@@ -261,3 +269,101 @@ if st.session_state.transcript:
     if st.session_state.get('executed_decision'):
         st.success(f"Decision '{st.session_state.executed_decision}' recorded successfully! Audit saved to `{st.session_state.get('audit_filepath')}`.")
         st.info("Note: GridGuard never executes grid actions or contacts anyone automatically.")
+
+        # Show Call-E escalation controls only if decision was "Escalate"
+        if st.session_state.executed_decision == "Escalate":
+            st.markdown("---")
+            st.subheader("6. Simulated Call‑E Supervisor Escalation")
+
+            with st.container(border=True):
+                st.markdown("#### 🔔 Call‑E Simulation Disclosure")
+                st.warning(
+                    "⚠️ **This is a simulated dry-run.** No real call will be placed. "
+                    "Call‑E is an AI voice agent. Supervisor identity and approval are simulated outcomes only."
+                )
+                st.info(
+                    "This simulation demonstrates how GridGuard would escalate to an authorized supervisor "
+                    "for review and approval. The supervisor's authorization and decision are mocked for demonstration."
+                )
+
+                # Scenario selector
+                st.markdown("#### Choose a simulated outcome:")
+                selected_scenario = st.selectbox(
+                    "Supervisor response scenario (dry-run only):",
+                    DRY_RUN_SCENARIOS,
+                    index=0,
+                    key="escalation_scenario"
+                )
+
+                # Second confirmation
+                st.markdown("#### Final confirmation:")
+                escalation_consent = st.checkbox(
+                    "I understand this is a dry-run simulation with no real call or grid action.",
+                    key="escalation_consent"
+                )
+
+                if st.button(
+                    "Run Simulated Supervisor Escalation",
+                    disabled=not escalation_consent,
+                    type="primary"
+                ):
+                    with st.spinner("Running Call‑E dry-run simulation..."):
+                        advisory = build_advisory(st.session_state.incident_record)
+                        escalation_result = build_dry_run_escalation(advisory, selected_scenario)
+                        st.session_state.escalation_result = escalation_result
+                        st.session_state.escalation_scenario_executed = selected_scenario
+                    st.rerun()
+
+            # Display escalation result if available
+            if st.session_state.get('escalation_result'):
+                st.markdown("---")
+                st.subheader("7. Supervisor Escalation Result")
+
+                result = st.session_state.escalation_result
+                final_status = result.get("final_status", "UNKNOWN")
+                supervisor_outcome = result.get("supervisor_outcome", "unknown").lower()
+
+                # Status-based rendering with canonical supervisor outcome
+                if supervisor_outcome == "approved":
+                    st.success("APPROVED: Supervisor authorized and approved escalation")
+                    st.markdown(f"**Workflow result:** {result.get('workflow_result_text', 'Approved')}")
+                    st.info("Escalation package would be created with the incident details and supervisor approval.")
+                elif supervisor_outcome == "denied":
+                    st.warning("DENIED: Supervisor authorized but denied escalation")
+                    st.markdown(f"**Workflow result:** {result.get('workflow_result_text', 'Denied')}")
+                elif supervisor_outcome == "unavailable":
+                    st.error("UNAVAILABLE: Supervisor not available or not authorized")
+                    st.markdown(f"**Workflow result:** {result.get('workflow_result_text', 'Not available')}")
+                elif supervisor_outcome == "failed":
+                    st.error("FAILED: Call-E execution failed")
+                    st.markdown(f"**Error:** {result.get('error_message', 'Call could not be completed')}")
+                    st.markdown(f"**Workflow result:** {result.get('workflow_result_text', 'Execution failed')}")
+                    st.warning("No supervisor response received. Manual escalation may be required.")
+                else:
+                    st.warning("UNCLEAR: Unable to interpret supervisor response")
+                    st.markdown(f"**Workflow result:** {result.get('workflow_result_text', 'Manual follow-up needed')}")
+
+                # Display result details with canonical outcome
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Auth Confirmed", "Yes" if result.get("auth_confirmed") else ("No" if result.get("auth_confirmed") is False else "Unknown"))
+                col2.metric("Review Confirmed", "Yes" if result.get("review_confirmed") else ("No" if result.get("review_confirmed") is False else "Unknown"))
+                col3.metric("Supervisor Outcome", supervisor_outcome.capitalize())
+                col4.metric("Mode", "Dry-run")
+
+                # Show transcript
+                st.markdown("#### Simulated Call Transcript:")
+                st.text(result.get("transcript_summary", "No transcript"))
+
+                # Update audit with escalation result
+                with st.container(border=True):
+                    st.markdown("#### Audit Update")
+                    if st.button("Save escalation result to audit packet", key="save_escalation_audit"):
+                        audit_filepath = save_audit_packet(
+                            st.session_state.incident_record,
+                            st.session_state.executed_decision,
+                            outcome_mapping.get(st.session_state.executed_decision, "UNKNOWN"),
+                            escalation_result=result
+                        )
+                        st.session_state.escalation_audit_saved = True
+                        st.success(f"Escalation result recorded in audit: `{audit_filepath}`")
+                        st.info("The audit packet now includes both the operator decision and the simulated supervisor response.")
