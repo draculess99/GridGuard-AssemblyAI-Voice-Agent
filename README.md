@@ -220,11 +220,11 @@ flowchart TD
     Audit1 --> End1["Workflow ends<br/>dry_run: true"]
     Audit2 --> End2["Workflow ends<br/>dry_run: true"]
 
-    style Live fill:#e1f5ff
-    style Mock fill:#fff3e0
-    style Audit1 fill:#e8f5e9
-    style Audit2 fill:#e8f5e9
-    style SimCall fill:#f3e5f5
+    style Live fill:#e1f5ff,color:#000000
+    style Mock fill:#fff3e0,color:#000000
+    style Audit1 fill:#e8f5e9,color:#000000
+    style Audit2 fill:#e8f5e9,color:#000000
+    style SimCall fill:#f3e5f5,color:#000000
 ```
 
 **Key design points:**
