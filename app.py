@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 # Load env before imports
@@ -13,6 +14,54 @@ from backend.incident import build_synthetic_incident_record
 
 st.set_page_config(page_title="GridGuard Voice Escalation", page_icon="⚡", layout="wide")
 
+
+def render_spoken_message(label: str, text: str, key: str) -> None:
+    """Render a browser-based text-to-speech button using Web Speech API.
+
+    The speech is generated locally by the browser and plays only after user clicks.
+    No external service or API key is used.
+    """
+    escaped_text = text.replace('\\', '\\\\').replace('"', '\\"')
+    html_code = f"""
+    <div style="margin: 1rem 0;">
+        <button
+            id="speak_btn_{key}"
+            onclick="window.speakText_{key}()"
+            style="
+                background-color: #1f2937;
+                border: 1px solid #4b5563;
+                border-radius: 0.375rem;
+                color: #e5e7eb;
+                cursor: pointer;
+                font-size: 0.95rem;
+                padding: 0.5rem 1rem;
+                transition: all 0.2s;
+                font-weight: 500;
+            "
+            onmouseover="this.style.backgroundColor='#374151'; this.style.borderColor='#6b7280';"
+            onmouseout="this.style.backgroundColor='#1f2937'; this.style.borderColor='#4b5563';"
+        >
+            🔊 {label}
+        </button>
+    </div>
+    <script>
+        window.speakText_{key} = function() {{
+            const text = "{escaped_text}";
+            if ('speechSynthesis' in window) {{
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }} else {{
+                console.log('Speech Synthesis API not supported');
+            }}
+        }};
+    </script>
+    """
+    components.html(html_code, height=80)
+
 st.markdown("""
 <style>
 /* Readability-only presentation styles for the transcript and status context. */
@@ -20,7 +69,8 @@ div[data-testid="stTextArea"] textarea[disabled] {
     background: #0f172a !important;
     border: 1px solid #334155 !important;
     border-radius: 0.45rem;
-    color: #F1F5F9 !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
     font-size: 1.15rem !important;
     line-height: 1.6 !important;
     opacity: 1 !important;
@@ -202,7 +252,19 @@ if st.session_state.transcript:
     col2.metric("Severity", details["severity"])
     col3.metric("Affected Asset", details["affected_asset"])
     col4.metric("Requested Action", details["requested_action"])
-    
+
+    st.markdown("---")
+    st.subheader("Operator Briefing")
+    briefing_text = (
+        f"GridGuard briefing. Severity: {details['severity']}. "
+        f"Location: {details['location']}. "
+        f"Affected asset: {details['affected_asset']}. "
+        f"Requested action: {details['requested_action']}. "
+        f"Please review the extracted details before selecting a decision."
+    )
+    render_spoken_message("Speak operator briefing", briefing_text, "briefing")
+    st.caption("🎙️ Browser speech demo only. Spoken playback is generated locally by the browser and is not an AssemblyAI service.")
+
     st.markdown("---")
     st.subheader("3. Conversation Review Panel")
     
@@ -270,6 +332,14 @@ if st.session_state.transcript:
         st.success(f"Decision '{st.session_state.executed_decision}' recorded successfully! Audit saved to `{st.session_state.get('audit_filepath')}`.")
         st.info("Note: GridGuard never executes grid actions or contacts anyone automatically.")
 
+        decision_confirmation = (
+            f"Decision recorded: {st.session_state.executed_decision}. "
+            f"This workflow remains a simulated dry run. "
+            f"No real grid action, telephone call, or external escalation has occurred."
+        )
+        render_spoken_message("Speak decision confirmation", decision_confirmation, "decision_confirm")
+        st.caption("🎙️ Browser speech demo only. Spoken playback is generated locally by the browser and is not an AssemblyAI service.")
+
         # Show Call-E escalation controls only if decision was "Escalate"
         if st.session_state.executed_decision == "Escalate":
             st.markdown("---")
@@ -294,6 +364,25 @@ if st.session_state.transcript:
                     index=0,
                     key="escalation_scenario"
                 )
+
+                # Scenario preview speech
+                def build_scenario_preview_text(scenario: str) -> str:
+                    """Build preview text based on selected scenario."""
+                    if scenario == "Authorized, reviewed, approve":
+                        return "Selected simulated scenario: authorized supervisor, evidence reviewed, escalation approved. This is a dry-run preview only. No call has been placed and no action has been executed."
+                    elif scenario == "Authorized, reviewed, reject":
+                        return "Selected simulated scenario: authorized supervisor, evidence reviewed, escalation denied. This is a dry-run preview only. No call has been placed and no action has been executed."
+                    elif scenario == "Not authorized / wrong person":
+                        return "Selected simulated scenario: supervisor not authorized or wrong person contacted. This is a dry-run preview only. No call has been placed and no action has been executed."
+                    elif scenario == "Authorized, not reviewed":
+                        return "Selected simulated scenario: authorized supervisor, but evidence was not reviewed. This is a dry-run preview only. No call has been placed and no action has been executed."
+                    elif scenario == "Call-E execution failure":
+                        return "Selected simulated scenario: Call-E execution failed due to a technical error. This is a dry-run preview only. No call has been placed and no action has been executed."
+                    else:
+                        return "Selected simulated scenario. This is a dry-run preview only. No call has been placed and no action has been executed."
+
+                preview_text = build_scenario_preview_text(selected_scenario)
+                render_spoken_message("Preview selected scenario", preview_text, "scenario_preview")
 
                 # Second confirmation
                 st.markdown("#### Final confirmation:")
@@ -367,3 +456,30 @@ if st.session_state.transcript:
                         st.session_state.escalation_audit_saved = True
                         st.success(f"Escalation result recorded in audit: `{audit_filepath}`")
                         st.info("The audit packet now includes both the operator decision and the simulated supervisor response.")
+
+                if st.session_state.get('escalation_audit_saved'):
+                    auth_confirmed = result.get("auth_confirmed")
+                    review_confirmed = result.get("review_confirmed")
+                    supervisor_outcome_lower = result.get("supervisor_outcome", "unknown").lower()
+                    workflow_result = result.get("workflow_result_text", "Unknown")
+
+                    auth_text = "Supervisor authorization was confirmed." if auth_confirmed else ("Supervisor authorization was not confirmed." if auth_confirmed is False else "Supervisor authorization status is unknown.")
+                    review_text = "Supervisor review was confirmed." if review_confirmed else ("Supervisor review was not confirmed." if review_confirmed is False else "Supervisor review status is unknown.")
+
+                    if supervisor_outcome_lower == "approved":
+                        outcome_text = "The supervisor approved escalation."
+                    elif supervisor_outcome_lower == "denied":
+                        outcome_text = "The supervisor denied escalation."
+                    elif supervisor_outcome_lower == "unavailable":
+                        outcome_text = "The supervisor was unavailable or not authorized."
+                    elif supervisor_outcome_lower == "failed":
+                        outcome_text = "Escalation simulation failed due to a technical error."
+                    else:
+                        outcome_text = "The supervisor outcome could not be determined."
+
+                    audited_outcome_text = (
+                        f"Dry-run escalation complete. {auth_text} {review_text} {outcome_text} "
+                        f"{workflow_result}. The audit packet has been saved. No real call was placed."
+                    )
+                    render_spoken_message("Speak audited outcome", audited_outcome_text, "audited_outcome")
+                    st.caption("🎙️ Browser speech demo only. Spoken playback is generated locally by the browser and is not an AssemblyAI service.")
